@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "removeComments": true,
+        "sourceMap": true,
+        "allowJs": true,
+        "jsx": "react-jsx",
+        "strictNullChecks": true,
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx"
+    ],
+    "exclude": [
+        "node_modules",
+        "public"
+    ]
+}
