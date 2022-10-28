@@ -6,13 +6,7 @@ import {
     Typography,
     FormControl,
     FormLabel,
-    RadioGroup,
-    FormControlLabel,
-    Radio,
     Box,
-    List,
-    ListItem,
-    ListItemText,
     Dialog,
     DialogActions,
     DialogContent,
@@ -20,6 +14,8 @@ import {
     MenuItem,
     Select,
     CircularProgress,
+    RadioGroup,
+    Radio,
 } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useEffect, useMemo, useState } from 'react';
@@ -61,6 +57,21 @@ export default function Importer<TData>({
 
     const [dialogOpen, setDialogOpen] = useState(false);
 
+    const handleFileStr = (fileStr: string) => {
+        const { data, headers: headerData } = csvParse<TData>(fileStr);
+
+        setImported({
+            data,
+            headers: headerData.reduce(
+                (agg, field) => ({ ...agg, [field]: toTitleCase(field) }),
+                {} as Record<string, string>
+            ),
+        });
+
+        setProgress(null);
+        setStatus('pairing');
+    };
+
     const handleFileUpload = (file: File | undefined) => {
         if (!file || imported?.data) {
             return;
@@ -83,21 +94,8 @@ export default function Importer<TData>({
         const reader = new FileReader();
 
         reader.addEventListener('load', (event) => {
-            if (!event.target?.result) return;
-            const fileStr = event.target.result.toString();
-
-            const { data, headers: headerData } = csvParse<TData>(fileStr);
-
-            setImported({
-                data,
-                headers: headerData.reduce(
-                    (agg, field) => ({ ...agg, [field]: toTitleCase(field) }),
-                    {} as Record<string, string>
-                ),
-            });
-
-            setProgress(null);
-            setStatus('pairing');
+            if (event.target?.result)
+                handleFileStr(event.target.result.toString());
         });
 
         reader.addEventListener('progress', (event) => {
@@ -170,7 +168,22 @@ export default function Importer<TData>({
 
     return (
         <>
-            <Button variant="contained" component="label">
+            <Button
+                variant="contained"
+                component="label"
+                onClick={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+
+                    window
+                        .fetch('/names-descriptions.csv')
+                        .then((response) => response.text())
+                        .then((text) => {
+                            setDialogOpen(true);
+                            handleFileStr(text);
+                        });
+                }}
+            >
                 Import
                 <input
                     type="file"
@@ -302,15 +315,43 @@ function MergeControl({
             </Typography>
             <FormControl>
                 <Select
-                    id="demo-simple-select"
+                    id="merge-select"
                     value={mergePair}
                     onChange={(event) => {
                         setMergePair(event.target.value as number);
                     }}
+                    renderValue={(value) => {
+                        const column = pairs[value];
+                        return (
+                            pairs[value] && (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                    }}
+                                    key={column.existing}
+                                >
+                                    {headers.existing[column.existing]}
+                                    <ArrowForwardIcon
+                                        sx={{
+                                            verticalAlign: 'bottom',
+                                        }}
+                                    />
+                                    {headers.imported[column.imported]}
+                                </Box>
+                            )
+                        );
+                    }}
                 >
-                    <MenuItem value={-1}>None</MenuItem>
                     {pairs.map((column, index) => (
-                        <MenuItem key={column.existing} value={index}>
+                        <MenuItem
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                            }}
+                            key={column.existing}
+                            value={index}
+                        >
                             {headers.existing[column.existing]}
                             <ArrowForwardIcon
                                 sx={{
@@ -356,6 +397,7 @@ function PairControl({
     setPairs: (pairs: Pair[]) => void;
 }) {
     const [state, setState] = useState<Pair>(DEFAULT_STATE);
+    const [mergePair, setMergePair] = useState<Pair | null>(null);
 
     const addPair = () => {
         setPairs([...pairs, state]);
@@ -396,22 +438,28 @@ function PairControl({
     return (
         <Box
             component="div"
-            sx={{ minWidth: 500, display: 'flex', flexDirection: 'column' }}
+            sx={{ display: 'flex', flexDirection: 'column', width: 400 }}
         >
-            <Typography variant="subtitle1">
-                Pair columns from the imported CSV to columns in the table.
-            </Typography>
-
             {hasOptions && (
                 <>
+                    <Typography variant="subtitle1" sx={{ marginBottom: 1 }}>
+                        Select imported columns to merge into existing columns.
+                    </Typography>
                     <Box
                         sx={{
                             display: 'flex',
                             flexDirection: 'row',
                             justifyContent: 'space-between',
-                            margin: 2,
                         }}
                     >
+                        <Button
+                            disabled={!state.existing || !state.imported}
+                            onClick={addPair}
+                            variant="contained"
+                            sx={{ marginRight: 2, marginTop: 5 }}
+                        >
+                            Merge
+                        </Button>
                         {headerTypes.map((headerType, headerIndex) => (
                             <FormControl
                                 key={headerType}
@@ -422,82 +470,77 @@ function PairControl({
                                     width: '50%',
                                 }}
                             >
-                                <FormLabel id={headerType}>
+                                <FormLabel id={`${headerType}-label`}>
                                     {toTitleCase(headerType)}
                                 </FormLabel>
-                                <RadioGroup
-                                    aria-labelledby={headerType}
-                                    name="radio-buttons-group"
+                                <Select
+                                    id={`${headerType}-select`}
                                     value={state[headerType]}
-                                    onChange={(_, field) =>
+                                    onChange={(event) => {
                                         setState((prev) => ({
                                             ...prev,
-                                            [headerType]: field,
-                                        }))
-                                    }
+                                            [headerType]:
+                                                event.target.value.toString(),
+                                        }));
+                                    }}
+                                    name={`${headerType}-select`}
                                 >
                                     {pairOptions[headerType].map(
                                         ({ label, value }) => (
-                                            <FormControlLabel
-                                                key={value}
-                                                value={value}
-                                                control={<Radio />}
-                                                label={label}
-                                            />
+                                            <MenuItem key={value} value={value}>
+                                                {label}
+                                            </MenuItem>
                                         )
                                     )}
-                                </RadioGroup>
+                                </Select>
                             </FormControl>
                         ))}
                     </Box>
-                    <Button
-                        disabled={!state.existing || !state.imported}
-                        onClick={addPair}
-                        variant="contained"
-                        sx={{ margin: '0 auto' }}
-                    >
-                        Pair
-                    </Button>
                 </>
             )}
             {!!pairs.length && (
                 <>
-                    <List component="div" role="list">
-                        {pairs.map((pair, index) => {
-                            return (
-                                <ListItem
-                                    key={index}
-                                    role="listitem"
+                    <Typography
+                        variant="subtitle1"
+                        sx={{
+                            fontWeight: 'bold',
+                            marginTop: hasOptions ? 2 : 0,
+                        }}
+                    >
+                        Columns to merge
+                    </Typography>
+
+                    {pairs.map((pair, index) => {
+                        return (
+                            <Box
+                                key={index}
+                                role="listitem"
+                                sx={{
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    m: '0.5rem 0',
+                                }}
+                            >
+                                <Typography sx={{ width: '50%' }}>
+                                    {headers.imported[pair.imported]}
+                                </Typography>
+                                <ArrowForwardIcon />
+                                <Typography
                                     sx={{
-                                        display: 'flex',
-                                        flexDirection: 'row',
-                                        p: 0,
-                                        m: 0,
+                                        width: '50%',
+                                        textAlign: 'right',
                                     }}
                                 >
-                                    <ListItemText
-                                        sx={{ width: '50%' }}
-                                        id={pair.imported}
-                                        primary={
-                                            headers.imported[pair.imported]
-                                        }
-                                    />
-                                    <ArrowForwardIcon />
-                                    <ListItemText
-                                        sx={{
-                                            width: '50%',
-                                            textAlign: 'right',
-                                        }}
-                                        id={pair.existing}
-                                        primary={
-                                            headers.existing[pair.existing]
-                                        }
-                                    />
-                                </ListItem>
-                            );
-                        })}
-                        <ListItem />
-                    </List>
+                                    {headers.existing[pair.existing]}
+                                </Typography>
+                            </Box>
+                        );
+                    })}
+                    <Box
+                        component="div"
+                        role="list"
+                        sx={{ marginTop: 0 }}
+                    ></Box>
                 </>
             )}
         </Box>

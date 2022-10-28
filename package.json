@@ -6,7 +6,7 @@
     "test": "echo \"No test specified\" && exit 0",
     "build": "webpack --env mode=development",
     "build-prod": "webpack --env mode=production",
-    "start": "http-server docs"
+    "start": "http-server docs -S -C ../cert.pem -K ../key.pem -o"
   },
   "repository": {
     "type": "git",
