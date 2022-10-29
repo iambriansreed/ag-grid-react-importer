@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { AgGridReact, AgReactUiProps } from 'ag-grid-react';
+import { AgGridReact } from 'ag-grid-react';
 import Importer from './importer';
-import { GridApi, ValueFormatterParams } from 'ag-grid-community';
-import { csvParse, toTitleCase } from './util';
+import { ValueFormatterParams } from 'ag-grid-community';
+import csvParse from './csv-parse';
 
 const valueFormatterNum = (params: ValueFormatterParams) =>
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    params.data[params.colDef.field!].toLocaleString();
+    params.data[params.colDef.field!]?.toLocaleString();
 
 const columnDefs = [
     {
@@ -47,7 +47,7 @@ const columnDefs = [
 const importerHeaders = columnDefs.reduce(
     (defs, { field, headerName }: { field: string; headerName?: string }) => ({
         ...defs,
-        [field]: headerName || toTitleCase(field),
+        [field]: headerName || field,
     }),
     {} as Record<string, string>
 );
@@ -81,48 +81,55 @@ function App() {
                 </p>
                 <hr style={{ borderColor: '#666', margin: '2rem 0' }} />
             </div>
-            <div className="table-controls">
-                <Importer
-                    existingData={rowData}
-                    existingHeaders={importerHeaders}
-                    onImport={({ rowsToAdd, rowsToMerge, mergePair }) => {
-                        rowsToMerge.forEach((rowToMerge) => {
-                            const rowIndex = rowData.findIndex(
-                                (row) =>
-                                    row[mergePair.existing] ===
-                                    rowToMerge[mergePair.imported]
-                            );
 
-                            const rowNode =
-                                gridRef.current?.api.getDisplayedRowAtIndex(
-                                    rowIndex
-                                );
+            <div className="info">
+                <h2>Example 1</h2>
+                <p>
+                    This example demonstrates merging data from a csv file to
+                    the grid. <br />
+                    This csv file (
+                    <a href="/names-descriptions.csv">
+                        names-descriptions.csv
+                    </a>{' '}
+                    ) has a matching name column so the imported data can be
+                    merged.
+                </p>
 
-                            Object.entries(rowToMerge).forEach(
-                                ([field, value]) => {
-                                    rowNode?.setDataValue(field, value);
-                                }
-                            );
-                        });
+                <div className="table-controls">
+                    <Importer
+                        existingData={rowData}
+                        existingHeaders={importerHeaders}
+                        onImport={({ rowsToAdd, rowsToMerge }) => {
+                            rowsToMerge.forEach(({ existingIndex, row }) => {
+                                const rowNode =
+                                    gridRef.current?.api.getDisplayedRowAtIndex(
+                                        existingIndex
+                                    );
 
-                        gridRef.current?.api.applyTransaction({
-                            add: rowsToAdd,
-                        });
-                    }}
-                />
-                <a href="/names-descriptions.csv">names-descriptions.csv</a>
-            </div>
-            <div>
-                <div className="ag-theme-material ag-grid-container">
-                    <AgGridReact
-                        ref={gridRef}
-                        rowData={rowData}
-                        columnDefs={columnDefs}
-                        defaultColDef={{
-                            editable: true,
-                            filter: 'agTextColumnFilter',
+                                rowNode?.setData({
+                                    ...rowData[existingIndex],
+                                    ...row,
+                                });
+                            });
+
+                            gridRef.current?.api.applyTransaction({
+                                add: rowsToAdd,
+                            });
                         }}
-                    ></AgGridReact>
+                    />
+                </div>
+                <div>
+                    <div className="ag-theme-material ag-grid-container">
+                        <AgGridReact
+                            ref={gridRef}
+                            rowData={rowData}
+                            columnDefs={columnDefs}
+                            defaultColDef={{
+                                editable: true,
+                                filter: 'agTextColumnFilter',
+                            }}
+                        ></AgGridReact>
+                    </div>
                 </div>
             </div>
         </>

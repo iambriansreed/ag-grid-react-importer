@@ -1,5 +1,5 @@
 // TODO: replace with something more robust
-export function csvParse<Row>(csv: string) {
+export default function csvParse<Row>(csv: string) {
     const [headers, ...lines] = csvToArray(csv);
 
     return {
@@ -34,9 +34,4 @@ function csvToArray(text: string) {
         p = l;
     }
     return ret;
-}
-
-export function toTitleCase(str: string) {
-    str = str.replace(/_/g, ' ');
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }

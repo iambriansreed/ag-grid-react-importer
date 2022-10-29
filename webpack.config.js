@@ -10,7 +10,6 @@ module.exports = ({ mode }) => ({
               mode: 'development',
           }
         : {
-            watch: true,
             mode: 'production',
           }),
     entry: {
@@ -61,7 +60,13 @@ module.exports = ({ mode }) => ({
         }),
         new RemovePlugin({
             before: {
-                include: ['./docs/*.js', './docs/*.css', './docs/*.text', './docs/*.map'],
+                include: [
+                    './docs/main.css',
+                    './docs/main.css.map',
+                    './docs/main.js',
+                    './docs/main.js.LICENSE.txt',
+                    './docs/main.js.map'
+                ],
             },
         }),
     ],
