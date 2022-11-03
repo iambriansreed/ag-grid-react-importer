@@ -21,6 +21,7 @@ import csvParse from './csv-parse';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { createContext, Fragment, useContext, useMemo, useState } from 'react';
 import readFileToString from './readFileToString';
+import { AgGridReactProps } from 'ag-grid-react';
 
 const headerOrigins = ['imported', 'existing'] as const;
 type HeaderOrigin = typeof headerOrigins[number];
@@ -298,14 +299,21 @@ function PairControl() {
 }
 
 export default function Importer<TData>({
-    existingData,
-    existingHeaders,
+    rowData,
+    columnDefs,
     onImport,
 }: {
-    existingData: TData[];
-    existingHeaders: Record<string, string>;
+    rowData: TData[];
+    columnDefs: AgGridReactProps['columnDefs'];
     onImport: (report: ImportReport<TData>) => void;
 }) {
+    const existingHeaders: Record<string, string> = {};
+    columnDefs?.forEach(
+        ({ field, headerName }: { field: string; headerName?: string }) => {
+            existingHeaders[field] = headerName || field;
+        }
+    );
+
     const [importedData, setImportedData] = useState<Partial<TData>[] | null>(
         null
     );
@@ -375,7 +383,7 @@ export default function Importer<TData>({
         const getExistingRowIndex = (importedRow: Partial<TData>) => {
             if (!mergePair) return -1;
 
-            return existingData.findIndex(
+            return rowData.findIndex(
                 (existingRow) =>
                     existingRow[mergePair.existing] ===
                     importedRow[mergePair.imported]
