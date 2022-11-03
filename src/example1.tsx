@@ -94,7 +94,7 @@ export default function Example1() {
                         });
                     }}
                 />
-                <a href="/parks-descriptions.csv">parks-descriptions.csv</a>
+                <a href="parks-descriptions.csv">parks-descriptions.csv</a>
             </div>
             <div>
                 <div className="ag-theme-material ag-grid-container">
