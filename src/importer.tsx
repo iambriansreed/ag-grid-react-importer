@@ -18,10 +18,9 @@ import {
     Radio,
 } from '@mui/material';
 import csvParse from './csv-parse';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { createContext, Fragment, useContext, useMemo, useState } from 'react';
 import readFileToString from './readFileToString';
-import { AgGridReactProps } from 'ag-grid-react';
+import { GridApi } from 'ag-grid-community';
 
 const headerOrigins = ['imported', 'existing'] as const;
 type HeaderOrigin = typeof headerOrigins[number];
@@ -31,7 +30,7 @@ type ImportReport<TData> = {
     rowsToAdd: TData[];
 };
 type Status = 'fileSizeError' | 'progress' | 'pairing' | 'report';
-
+type Option = { label: string; value: string };
 type State = {
     status: Status;
     columnPairs: Pair[];
@@ -39,7 +38,7 @@ type State = {
     progress: number | null | undefined;
     dialogOpen: boolean;
     fileSizeMb: number;
-    importedHeaders: Record<string, string>;
+    importedHeaders: Option[];
 };
 
 const DEFAULT_PAIR_STATE: Pair = { existing: '', imported: '' };
@@ -50,12 +49,12 @@ const DEFAULT_STATE: State = {
     mergeColumnIndex: -1,
     progress: null,
     dialogOpen: false,
-    importedHeaders: {},
+    importedHeaders: [],
     fileSizeMb: 0,
 };
 
 type Context = State & {
-    existingHeaders: Record<string, string>;
+    existingHeaders: Option[];
     setState: (update: Partial<State>) => void;
 };
 
@@ -63,7 +62,7 @@ const ImporterContext = createContext<Context>({
     ...DEFAULT_STATE,
     // eslint-disable-next-line @typescript-eslint/no-empty-function, @typescript-eslint/no-unused-vars
     setState: (update: Partial<State>) => {},
-    existingHeaders: {},
+    existingHeaders: [],
 });
 
 const useImporterContext = () => useContext<Context>(ImporterContext);
@@ -112,18 +111,12 @@ function PairControl() {
         mergeColumnIndex,
     } = useImporterContext();
 
-    const headersToOptions = (headers: Record<string, string>) =>
-        Object.entries(headers)
-            .map(([value, label]) => ({ value, label }))
-            .sort((a, b) => (a.label > b.label ? 1 : -1));
-
     const pairOptions = useMemo(
-        // remaining if not already in a pair
         () => ({
-            existing: headersToOptions(existingHeaders),
-            imported: headersToOptions(importedHeaders),
+            existing: existingHeaders,
+            imported: importedHeaders,
         }),
-        [columnPairs]
+        [importedHeaders, existingHeaders]
     );
 
     const hasOptions =
@@ -153,6 +146,7 @@ function PairControl() {
     };
 
     const columnPairsWithEmpty = (): Pair[] => {
+        // adds a row for each saved pair and an empty row id there are enough options to select from
         const lastPair = columnPairs[columnPairs.length - 1];
 
         if (
@@ -180,6 +174,7 @@ function PairControl() {
             {hasOptions && (
                 <>
                     <Grid container rowSpacing={1} columnSpacing={1}>
+                        {/* Row - 1 */}
                         <Grid item xs={validPairs > 1 ? 5 : 6}>
                             <FormLabel>Imported Column</FormLabel>
                         </Grid>
@@ -191,6 +186,7 @@ function PairControl() {
                                 <FormLabel>Merge On</FormLabel>
                             </Grid>
                         )}
+                        {/* Row - 2 */}
                         {columnPairsWithEmpty().map((pair, pairIndex) => (
                             <Fragment key={pairIndex}>
                                 {headerOrigins.map((headerOrigin) => (
@@ -300,20 +296,11 @@ function PairControl() {
 
 export default function Importer<TData>({
     rowData,
-    columnDefs,
-    onImport,
+    api,
 }: {
     rowData: TData[];
-    columnDefs: AgGridReactProps['columnDefs'];
-    onImport: (report: ImportReport<TData>) => void;
+    api: GridApi<TData> | undefined;
 }) {
-    const existingHeaders: Record<string, string> = {};
-    columnDefs?.forEach(
-        ({ field, headerName }: { field: string; headerName?: string }) => {
-            existingHeaders[field] = headerName || field;
-        }
-    );
-
     const [importedData, setImportedData] = useState<Partial<TData>[] | null>(
         null
     );
@@ -325,6 +312,25 @@ export default function Importer<TData>({
 
     const [state, setStateComplete] = useState<State>(DEFAULT_STATE);
 
+    if (!api) return <></>;
+
+    const existingHeaders: { label: string; value: string }[] = [];
+    (api?.getColumnDefs() || []).forEach(
+        ({
+            field,
+            headerName,
+            hidden,
+        }: {
+            field: string;
+            headerName?: string;
+            hidden?: boolean;
+        }) => {
+            const value = field || headerName;
+            const label = headerName || field + (hidden ? ' (hidden)' : '');
+            if (value && label) existingHeaders.push({ value, label });
+        }
+    );
+
     const setState = (update: Partial<typeof state>) =>
         setStateComplete((prev) => ({ ...prev, ...update }));
 
@@ -333,15 +339,10 @@ export default function Importer<TData>({
 
         setImportedData(data);
 
-        const importedHeaders: Record<string, string> = {};
-        headers.forEach((field) => {
-            importedHeaders[field] = field;
-        });
-
         setState({
             status: 'pairing',
             progress: null,
-            importedHeaders,
+            importedHeaders: headers.map((value) => ({ label: value, value })),
         });
     };
 
@@ -417,7 +418,21 @@ export default function Importer<TData>({
             handleMerge();
         }
         if (status === 'report') {
-            onImport(report);
+            const { rowsToAdd, rowsToMerge } = report;
+
+            rowsToMerge.forEach(({ existingIndex, row }) => {
+                const rowNode = api?.getDisplayedRowAtIndex(existingIndex);
+
+                rowNode?.setData({
+                    ...rowData[existingIndex],
+                    ...row,
+                });
+            });
+
+            api?.applyTransaction({
+                add: rowsToAdd,
+            });
+
             handleClose();
         }
     };

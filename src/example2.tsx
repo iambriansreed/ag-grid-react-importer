@@ -70,27 +70,7 @@ export default function Example1() {
             </p>
 
             <div className="table-controls">
-                <Importer
-                    rowData={rowData}
-                    columnDefs={columnDefs}
-                    onImport={({ rowsToAdd, rowsToMerge }) => {
-                        rowsToMerge.forEach(({ existingIndex, row }) => {
-                            const rowNode =
-                                gridRef.current?.api.getDisplayedRowAtIndex(
-                                    existingIndex
-                                );
-
-                            rowNode?.setData({
-                                ...rowData[existingIndex],
-                                ...row,
-                            });
-                        });
-
-                        gridRef.current?.api.applyTransaction({
-                            add: rowsToAdd,
-                        });
-                    }}
-                />
+                <Importer rowData={rowData} api={gridRef.current?.api} />
                 <a href="grades-quiz-test-1.csv">grades-quiz-test-1.csv</a>
             </div>
             <div>
